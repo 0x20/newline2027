@@ -22,6 +22,34 @@
     window.blockifyDay = render;
 })();
 
+// ---------------------------------------------------------------- section titles in the block font
+(function blockTitles() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    document.querySelectorAll('.title').forEach(h => {
+        const lines = [...h.querySelectorAll('span')];
+        const avail = h.clientWidth;
+        if (!lines.length || !avail) return;
+        // one letter size for all lines of a title: as big as the longest line allows
+        const maxH = Math.max(30, Math.min(58, innerWidth * 0.06));
+        for (const el of lines) el.dataset.text = el.textContent.trim().replace(/&/g, '+');
+        const pads = 1.6;                                           // padding around the letters, in cells
+        const ch = Math.min(...lines.map(el => BLOCKFONT.fit(el.dataset.text, avail * 0.92, maxH)));
+        for (const el of lines) {
+            const text = el.dataset.text;
+            const pad = ch * pads, w = Math.min(avail, BLOCKFONT.width(text, ch) + pad * 2), hh = BLOCKFONT.height(ch) + pad;
+            const cv = document.createElement('canvas');
+            cv.width = Math.ceil(w * dpr); cv.height = Math.ceil(hh * dpr);
+            cv.style.width = w + 'px';
+            const g = cv.getContext('2d');
+            g.scale(dpr, dpr);
+            g.fillStyle = '#000'; g.fillRect(0, 0, w, hh);
+            BLOCKFONT.draw(g, text, pad, pad / 2, ch, { color: '#fff', cutColor: '#000', outline: 0, skew: 0.14 });
+            el.dataset.blocked = '1';
+            el.replaceChildren(cv);
+        }
+    });
+})();
+
 // ---------------------------------------------------------------- HUD: which signal is on screen
 (function sectionHud() {
     const el = document.getElementById('sig');
@@ -165,4 +193,14 @@
         el.replaceChildren(day, row);
         if (window.blockifyDay) window.blockifyDay(day);
     }
+})();
+
+// ---------------------------------------------------------------- map: scrolling passes over it until it is clicked
+(function mapGuard() {
+    document.querySelectorAll('.map').forEach(map => {
+        const off = () => map.classList.remove('live');
+        map.addEventListener('click', () => map.classList.add('live'));
+        map.addEventListener('mouseleave', off);
+        addEventListener('scroll', off, { passive: true });
+    });
 })();

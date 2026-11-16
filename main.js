@@ -1,14 +1,16 @@
 // NewLine 2027 — the void
 // Raymarched black noise, light beams, random QR signs flying past,
 // and the page's headings rendered as block-stencil signs inside the scene.
-// Scrolling the page flies the camera forward; each section's sign waits
-// ahead in the void and is passed as you scroll through it.
+// Scrolling the page flies the camera forward. The NEWLINE sign hangs in front
+// of the camera on the first screen; scroll down and you fly through it, after
+// that the void is only a backdrop for the page content.
 
 // ---------------------------------------------------------------- tunables
 const FOG_SCALE = 0.4;      // render resolution of the fog + big signs (0..1). Lower = chunkier blocks. Small text is always full res.
 const BASE_SPEED = 4;        // constant forward drift, units per second
 const UNITS_PER_VH = 22;     // one viewport of scrolling = this many units of flight
-const AHEAD = 6.5;           // how far ahead a section's sign hangs when that section is at the top of the screen
+const AHEAD = 6.5;           // how far in front of the camera the NEWLINE sign hangs at the top of the page
+const VOID_BEHIND = 0.3;     // how much the whole void is dimmed behind the content (0 = not at all)
 
 // ---------------------------------------------------------------- random QR / text signs
 const SIGNS = [
@@ -73,22 +75,14 @@ function buildAtlas() {
 }
 
 // ---------------------------------------------------------------- heading signs (billboards)
-// One atlas row per heading. `section` ties a sign to a page section; `tw` is the
-// visual width in world units, `y` the vertical offset. Signs sharing a section stack.
+// The NEWLINE sign: one atlas row per line. `tw` is the visual width in world
+// units, `y` the vertical offset from the centre of the screen. Section titles
+// are plain HTML headings (see script.js).
 const ROWS = 16, ROW_H = 256, ROW_W = 2048;
 const BOARDS = [
-  { section: "hero",    text: "NEWLINE",                       tw: 8.2, y: 0.9 },
-  { section: "hero",    kind: "year",                          tw: 8.2, y: -0.9 },
-  { section: "hero",    kind: "tags",  hi: true,               tw: 5.0, y: -2.1 },
-  { section: "when",    text: "28.29.30 MAY 2027",             tw: 7.8, y: 2.6 },
-  { section: "what",    text: "SHOW + TELL",                   tw: 6.0, y: 3.6 },
-  { section: "what",    text: "FOR HACKERS MAKERS",            tw: 6.4, y: 2.6 },
-  { section: "what",    text: "+ TINKERERS",                   tw: 4.4, y: 1.6 },
-  { section: "program", text: "PROGRAM",                       tw: 5.5, y: 2.6 },
-  { section: "where",   text: "HOW TO GET THERE",              tw: 7.0, y: 2.6 },
-  { section: "contact", text: "GET IN TOUCH",                  tw: 6.0, y: 2.6 },
-  { section: "end",     text: "END OF TRANSMISSION",           tw: 7.2, y: 0.5 },
-  { section: "end",     kind: "tags2", hi: true,               tw: 5.0, y: -0.8 },
+  { text: "NEWLINE",          tw: 8.2, y: 0.9 },
+  { kind: "year",             tw: 8.2, y: -0.9 },
+  { kind: "tags", hi: true,   tw: 5.0, y: -2.1 },
 ];
 const NB = BOARDS.length;
 
@@ -112,8 +106,8 @@ function buildBoardAtlas() {
       b.frac = (ROW_W - 80) / ROW_W;
       return;
     }
-    if (b.kind === "tags" || b.kind === "tags2") {
-      const txt = b.kind === "tags" ? "HSG // 0X20 // SHOW + TELL // FREE ENTRY" : "SEE YOU IN THE VOID // NEWLINE.GENT";
+    if (b.kind === "tags") {
+      const txt = "HSG // 0X20 // SHOW + TELL // FREE ENTRY";
       const ch = F.fit(txt, 1960, 130);
       const tw = F.width(txt, ch), th = F.height(ch);
       F.draw(g, txt, ROW_W / 2 - tw / 2, top + ROW_H / 2 - th / 2, ch, { outline: 6, cut: 0, skew: 0.1 });
@@ -190,14 +184,6 @@ function start({ fragFog, fragHi, vert }) {
 
   // ---------------------------------------------------------------- scroll → flight
   let boost = 0, lastScrollY = scrollY;
-  let milestones = {};
-
-  function measure() {
-    const k = UNITS_PER_VH / innerHeight;
-    milestones = {};
-    document.querySelectorAll("[data-sign]").forEach(el => { milestones[el.dataset.sign] = el.offsetTop * k; });
-    milestones.k = k;
-  }
 
   window.addEventListener("scroll", () => {
     const dy = Math.abs(scrollY - lastScrollY); lastScrollY = scrollY;
@@ -210,11 +196,8 @@ function start({ fragFog, fragHi, vert }) {
     const w = Math.max(2, Math.floor(innerWidth * FOG_SCALE)), h = Math.max(2, Math.floor(innerHeight * FOG_SCALE));
     rt.setSize(w, h);
     uniforms.uRes.value.set(w, h);
-    measure();
   }
   window.addEventListener("resize", resize); resize();
-  window.addEventListener("load", measure);
-  setTimeout(measure, 1500);
 
   const euler = new THREE.Euler(), m4 = new THREE.Matrix4();
   let last = performance.now(), t = 0, drift = 0, frames = 0, ftAcc = 0;
@@ -229,7 +212,7 @@ function start({ fragFog, fragHi, vert }) {
 
     boost *= Math.exp(-dt * 1.8);
     t += dt; drift += (BASE_SPEED + boost * 0.4) * dt;
-    const scrollDist = scrollY * (milestones.k || 0);
+    const scrollDist = scrollY * UNITS_PER_VH / innerHeight;
     const dist = drift + scrollDist;
 
     ftAcc += dt; if (++frames === 40) {
@@ -247,16 +230,16 @@ function start({ fragFog, fragHi, vert }) {
     m4.makeRotationFromEuler(euler); uniforms.uCamRot.value.setFromMatrix4(m4);
     uniforms.uTime.value = t;
     uniforms.uGlitch.value = boost > 6 ? 0.06 : 0;
-    uniforms.uDim.value = 0;
+    // scrolled into the content: the void dims a little
+    const behind = Math.min(1, Math.max(0, scrollY / (innerHeight * 0.7)));
+    uniforms.uDim.value = VOID_BEHIND * behind;
 
-    // heading signs: hang AHEAD units in front of the camera when their section is at the top of the viewport
+    // the NEWLINE sign: centred, AHEAD units in front of the camera at the top of the page.
+    // Scrolling closes the distance; past zero it is behind the camera and gone.
     for (let i = 0; i < NB; i++) {
       const b = BOARDS[i];
-      const ms = milestones[b.section];
-      if (ms === undefined) { bill[i].z = 1000; continue; }
-      const d = AHEAD + (ms - scrollDist);
       const W = (b.tw / (b.frac || 0.5)) * sf, H = W / 8;
-      bill[i].set(cx * (1 - 0.65 * sf * sf) + Math.sin(t * 0.5 + i) * 0.08 * sf, b.y * (0.55 + 0.45 * sf) + Math.sin(t * 0.7 + i * 1.3) * 0.06, cz - d, 0);
+      bill[i].set(cx + Math.sin(t * 0.5 + i) * 0.08 * sf, cy + b.y * (0.55 + 0.45 * sf) + Math.sin(t * 0.7 + i * 1.3) * 0.06, cz - (AHEAD - scrollDist), 0);
       billInfo[i].z = W; billInfo[i].w = H;
     }
 

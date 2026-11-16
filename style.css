@@ -3,6 +3,8 @@
   --hazard: repeating-linear-gradient(-45deg, #fff 0 8px, #000 8px 16px);
   --gutter: clamp(16px, 8vw, 120px);
   --col: 720px;
+  --top: 22vh;
+  --head: 72px;   /* gap above a section title when the page snaps to it (nav.js HEAD) */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -44,7 +46,7 @@ body {
 /* ============================================================ HUD */
 .hud {
   position: fixed;
-  z-index: 4;
+  z-index: 5;
   font-size: 11px;
   letter-spacing: 0.25em;
   opacity: 0.75;
@@ -67,20 +69,36 @@ body {
 @keyframes blink { to { opacity: 0; } }
 
 /* ============================================================ sections */
-main { position: relative; z-index: 2; }
+/* no z-index on main: it must not form a stacking context, so the map can sit above the scanlines */
+main { position: relative; }
 
 .s {
-  min-height: 100vh;
-  padding: 50vh var(--gutter) 18vh;
+  padding: var(--top) var(--gutter) 10vh;
   position: relative;
 }
+
+/* section titles, drawn in the block font by script.js (plain text until then) */
+.title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: var(--col);
+  margin-bottom: 1.8rem;
+  font-size: clamp(1.5rem, 5vw, 2.8rem);
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+.title span { background: #000; padding: 0.1em 0.3em; }
+.title span[data-blocked] { padding: 0; }
+.title canvas { display: block; max-width: 100%; height: auto; }
 
 /* rotated gutter tag per section */
 .s[data-label]::before {
   content: attr(data-label);
   position: absolute;
   left: 22px;
-  top: 50vh;
+  top: var(--top);
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   font-size: 11px;
@@ -93,15 +111,15 @@ main { position: relative; z-index: 2; }
   content: "";
   position: absolute;
   left: 22px;
-  top: calc(50vh + 140px);
+  top: calc(var(--top) + 140px);
   width: 19px;
   height: 90px;
   background: var(--hazard);
   opacity: 0.85;
 }
 
-.s.hero { padding: 0; position: relative; }
-.s.end { min-height: 80vh; }
+.s.hero { min-height: 100vh; padding: 0; }
+.s.end { min-height: 100vh; }
 
 .scroll-hint {
   position: absolute;
@@ -214,20 +232,30 @@ main { position: relative; z-index: 2; }
 #where .board .row .n { text-align: left; }
 #where .board .row .t { text-transform: uppercase; }
 
-.note { font-size: 11px; letter-spacing: 0.2em; opacity: 0.55; max-width: var(--col); }
+.note { font-size: 11px; letter-spacing: 0.2em; color: rgba(255,255,255,0.6); background: #000; padding: 0.5em 0.7em; display: inline-block; max-width: var(--col); }
 
-/* ============================================================ map: inverted OSM, the void bleeds through */
+/* ============================================================ map */
 .map {
   max-width: var(--col);
   height: 56vh;
   min-height: 280px;
   margin: 2rem 0 0.8rem;
   position: relative;
+  z-index: 4;   /* above .scanlines: the map is shown clean */
+}
+.map:not(.live) { cursor: pointer; }
+.map:not(.live) iframe { pointer-events: none; }
+.map:not(.live)::after {
+  content: "[ CLICK TO MOVE MAP ]";
+  position: absolute;
+  left: 0; top: 0;
+  background: #000;
+  padding: 0.4em 0.6em;
+  font-size: 11px;
+  letter-spacing: 0.12em;
 }
 .map iframe {
   width: 100%; height: 100%; display: block;
-  filter: grayscale(1) invert(1) contrast(1.3);
-  opacity: 0.9;
 }
 
 /* ============================================================ no WebGL: show the headings in the DOM instead */
@@ -247,8 +275,7 @@ body.nogl .s.hero { padding: 30vh var(--gutter) 0; }
 
 /* ============================================================ small screens */
 @media (max-width: 600px) {
-  :root { --gutter: 16px; }
-  .s { padding-top: 46vh; }
+  :root { --gutter: 16px; --top: 16vh; }
   .hud-tr, .hud-br { display: none; }
   .s[data-label]::before, .s[data-label]::after { display: none; }
   .row { flex-wrap: wrap; }
@@ -256,6 +283,15 @@ body.nogl .s.hero { padding: 30vh var(--gutter) 0; }
   .row .t { min-width: 100%; opacity: 0.6; font-size: 0.85em; }
   .row .n { text-align: left; }
   .k { white-space: normal; }
+}
+
+/* ============================================================ magnetic scrolling on touch
+   mouse, trackpad and keyboard are handled in nav.js; touch flings snap natively.
+   a section taller than the screen still scrolls freely inside itself. */
+@media (hover: none) and (pointer: coarse) {
+  html { scroll-snap-type: y mandatory; }
+  .s { scroll-snap-align: start; scroll-snap-stop: always; scroll-margin-top: calc(var(--head) - var(--top)); }
+  .s.hero { scroll-margin-top: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
