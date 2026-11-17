@@ -5,7 +5,10 @@
         if (el.dataset.blocked) return;
         const text = el.textContent.trim().replace(/&/g, '+');
         if (!text) return;
-        const H = 26, ch = H / BLOCKFONT.ROWS;                 // css px
+        // 26 css px tall, or smaller when the label would not fit next to the hazard bar (phones)
+        const avail = (el.parentElement.clientWidth || innerWidth) - 34;
+        const full = BLOCKFONT.width(text, 1) + 3;             // width in cells, padding included
+        const H = Math.min(26, Math.floor(avail / full * BLOCKFONT.ROWS)), ch = H / BLOCKFONT.ROWS;
         const w = BLOCKFONT.width(text, ch) + ch * 3, h = H + 6;
         const cv = document.createElement('canvas');
         cv.width = Math.ceil(w * dpr); cv.height = Math.ceil(h * dpr);
